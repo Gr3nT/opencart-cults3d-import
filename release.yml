@@ -1,0 +1,25 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create module zip from /upload
+        run: |
+          cd upload
+          zip -r ../cults3d_import_${GITHUB_REF_NAME}.zip .
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cults3d_import_${GITHUB_REF_NAME}.zip
+          body_path: CHANGELOG.md
