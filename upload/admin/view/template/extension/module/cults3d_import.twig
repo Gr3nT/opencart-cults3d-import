@@ -1,0 +1,199 @@
+{{ header }}
+{{ column_left }}
+
+<div id="content">
+  <div class="page-header">
+    <div class="container-fluid">
+      <div class="pull-right">
+        <button type="submit" form="form-cults3d" class="btn btn-primary"><i class="fa fa-save"></i> Mentés</button>
+        <button type="button" id="btn-import" class="btn btn-success"><i class="fa fa-download"></i> Import indítása</button>
+        <button type="button"
+                class="btn btn-default"
+                data-toggle="collapse"
+                data-target="#changelog-panel"
+                aria-expanded="false"
+                aria-controls="changelog-panel">
+          <i class="fa fa-info-circle"></i> Verzió & változásnapló
+        </button>
+      </div>
+      <h1>{{ heading_title ?: 'Cults3D Import' }}</h1>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+
+    {# ——— Összecsukható verzió + changelog (felül, gomb alatt) ——— #}
+    <div id="changelog-panel" class="collapse" style="margin-bottom:15px;">
+      <div class="panel panel-info">
+        <div class="panel-heading"><i class="fa fa-list"></i> Verzió & változásnapló</div>
+        <div class="panel-body">
+          <p><strong>Jelen verzió:</strong> v{{ module_version }}</p>
+          {% if changelog and changelog is iterable %}
+            {% for entry in changelog %}
+              <h4 style="margin-top:18px;">v{{ entry.version }} <small class="text-muted">({{ entry.date }})</small></h4>
+              {% if entry.items and entry.items is iterable %}
+                <ul>
+                  {% for it in entry.items %}
+                    <li>{{ it }}</li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            {% endfor %}
+          {% else %}
+            <p class="text-muted">Jelenleg nincs elérhető változásnapló.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# ——— Beállítások panel ——— #}
+    <div class="panel panel-default">
+      <div class="panel-heading"><i class="fa fa-cog"></i> Beállítások</div>
+      <div class="panel-body">
+        <form action="{{ action }}" method="post" enctype="multipart/form-data" id="form-cults3d" class="form-horizontal">
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">Cults3D URL-ek</label>
+            <div class="col-sm-10">
+              <textarea name="module_cults3d_import_urls" class="form-control" rows="6" placeholder="Soronként egy URL">{{ module_cults3d_import_urls }}</textarea>
+              <p class="help-block">Az import gomb a jelenleg beírt sorokat dolgozza fel sorban.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">Kategória</label>
+            <div class="col-sm-10">
+              <select name="module_cults3d_import_category_id" class="form-control">
+                <option value="0">-- (nincs) --</option>
+                {% for cat in categories %}
+                  <option value="{{ cat.category_id }}" {% if module_cults3d_import_category_id == cat.category_id %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">Szünet (mp)</label>
+            <div class="col-sm-10">
+              <input type="number" name="module_cults3d_import_delay" value="{{ module_cults3d_import_delay ?: 1 }}" min="0" class="form-control" />
+              <p class="help-block">Két URL feldolgozása között ennyit vár (kliens oldali késleltetés).</p>
+            </div>
+          </div>
+
+          <hr>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">OpenAI mód</label>
+            <div class="col-sm-10">
+              <label class="checkbox-inline">
+                <input type="checkbox" name="module_cults3d_import_enable_translation" value="1" {% if module_cults3d_import_enable_translation %}checked{% endif %}> Bekapcsolva
+              </label>
+              <p class="help-block">Ha be van kapcsolva, minden admin nyelvre ugyanazzal a prompttal a cél nyelven generálunk (név, leírás, meta leírás, meta név = név).</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">OpenAI prompt</label>
+            <div class="col-sm-10">
+              <textarea name="module_cults3d_import_openai_prompt" class="form-control" rows="3" placeholder="Írj részletes, jól tagolt leírást a cél nyelven; egyszerű HTML (&lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt;) megengedett.">{{ module_cults3d_import_openai_prompt }}</textarea>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">OpenAI API kulcs</label>
+            <div class="col-sm-10">
+              <input type="text" name="module_cults3d_import_openai_api_key" value="{{ module_cults3d_import_openai_api_key }}" class="form-control" placeholder="sk-..." />
+            </div>
+          </div>
+
+        </form>
+      </div>
+    </div>
+
+    {# ——— Import futtatása panel ——— #}
+    <div class="panel panel-default">
+      <div class="panel-heading"><i class="fa fa-download"></i> Import futtatása</div>
+      <div class="panel-body">
+        <div id="progress" style="margin-bottom:8px;"></div>
+        <div id="import-results" style="white-space: pre-line; background:#f9f9f9; border:1px solid #ddd; padding:10px; height:320px; overflow-y:auto;"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="text/javascript">
+(function(){
+  function appendLine(html) {
+    var box = $('#import-results');
+    box.append(html + "\n");
+    box.scrollTop(box.prop('scrollHeight'));
+  }
+
+  $('#btn-import').on('click', function() {
+    var urls = ($('textarea[name="module_cults3d_import_urls"]').val() || '')
+      .split(/\r?\n/)
+      .map(function(s){ return s.trim(); })
+      .filter(function(s){ return s.length > 0; });
+
+    if (!urls.length) {
+      appendLine('Nincs feldolgozható URL.');
+      return;
+    }
+
+    var cat    = $('select[name="module_cults3d_import_category_id"]').val();
+    var delay  = parseInt($('input[name="module_cults3d_import_delay"]').val() || '0', 10);
+    var enable = $('input[name="module_cults3d_import_enable_translation"]').is(':checked') ? 1 : 0;
+    var prompt = $('textarea[name="module_cults3d_import_openai_prompt"]').val();
+    var key    = $('input[name="module_cults3d_import_openai_api_key"]').val();
+
+    var total = urls.length, idx = 0;
+    $('#import-results').html('');
+    $('#progress').text('0 / ' + total + ' kész');
+    $('#btn-import').prop('disabled', true);
+
+    function next() {
+      if (idx >= total) {
+        $('#progress').text(total + ' / ' + total + ' kész');
+        $('#btn-import').prop('disabled', false);
+        return;
+      }
+
+      var payload = {
+        url: urls[idx],
+        category_id: cat,
+        enable_translation: enable,
+        openai_prompt: prompt,
+        openai_api_key: key,
+        user_token: '{{ user_token }}'
+      };
+
+      $.ajax({
+        url: '{{ import_single_action_js }}',
+        type: 'post',
+        dataType: 'json',
+        data: payload,
+        success: function(res) {
+          if (res && res.ok) {
+            appendLine(res.line);
+          } else {
+            appendLine(res && res.line ? res.line : ('❌ ' + urls[idx] + ' – ismeretlen hiba'));
+          }
+        },
+        error: function(xhr) {
+          appendLine('❌ ' + urls[idx] + ' – AJAX hiba: ' + xhr.status + ' ' + xhr.statusText);
+        },
+        complete: function() {
+          idx++;
+          $('#progress').text(idx + ' / ' + total + ' kész');
+          setTimeout(next, Math.max(0, delay * 1000));
+        }
+      });
+    }
+
+    next();
+  });
+})();
+</script>
+
+{{ footer }}
