@@ -1,0 +1,339 @@
+{{ header }}
+{{ column_left }}
+
+<div id="content">
+  <div class="page-header">
+    <div class="container-fluid">
+      <div class="pull-right">
+        <button type="submit" form="form-cults3d" class="btn btn-primary"><i class="fa fa-save"></i> Mentés</button>
+        <button type="button" id="btn-import" class="btn btn-success"><i class="fa fa-download"></i> Import indítása</button>
+        <button type="button"
+                class="btn btn-default"
+                data-toggle="collapse"
+                data-target="#changelog-panel"
+                aria-expanded="false"
+                aria-controls="changelog-panel">
+          <i class="fa fa-info-circle"></i> Verzió & változásnapló
+        </button>
+      </div>
+      <h1>{{ heading_title ?: 'Cults3D Import' }}</h1>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+
+    <div id="changelog-panel" class="collapse" style="margin-bottom:15px;">
+      <div class="panel panel-info">
+        <div class="panel-heading"><i class="fa fa-list"></i> Verzió & változásnapló</div>
+        <div class="panel-body">
+          <p><strong>Jelen verzió:</strong> v{{ module_version }}</p>
+          {% if changelog and changelog is iterable %}
+            {% for entry in changelog %}
+              <h4 style="margin-top:18px;">v{{ entry.version }} <small class="text-muted">({{ entry.date }})</small></h4>
+              {% if entry.items and entry.items is iterable %}
+                <ul>
+                  {% for it in entry.items %}
+                    <li>{{ it }}</li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            {% endfor %}
+          {% else %}
+            <p class="text-muted">Jelenleg nincs elérhető változásnapló.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="panel panel-default">
+      <div class="panel-heading"><i class="fa fa-cog"></i> Beállítások</div>
+      <div class="panel-body">
+        <form action="{{ action }}" method="post" enctype="multipart/form-data" id="form-cults3d" class="form-horizontal">
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">Cults3D URL-ek</label>
+            <div class="col-sm-10">
+              <textarea name="module_cults3d_import_urls" class="form-control" rows="6" placeholder="Soronként egy URL vagy címkézett sorok, pl. [cat:12] https://...">{{ module_cults3d_import_urls }}</textarea>
+              <p class="help-block">
+                Soronként használhatod a <code>[cat:ID]</code> címkét.
+                <br>Batch-et <strong>nem kell</strong> megadnod: ha van kategória, a batch automatikusan a kategória <em>neve</em> lesz.
+                <br>Ha nincs <code>[cat:ID]</code>, akkor az űrlapon választott alapértelmezett kategória érvényesül.
+              </p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">Alapértelmezett kategória</label>
+            <div class="col-sm-10">
+              <select name="module_cults3d_import_category_id" class="form-control">
+                <option value="0">-- (nincs) --</option>
+                {% for cat in categories %}
+                  <option value="{{ cat.category_id }}" {% if module_cults3d_import_category_id == cat.category_id %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">Szünet (mp)</label>
+            <div class="col-sm-10">
+              <input type="number" name="module_cults3d_import_delay" value="{{ module_cults3d_import_delay ?: 1 }}" min="0" class="form-control" />
+              <p class="help-block">Kézi importnál ennyit várunk a sorok között.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">Duplikátum kezelés</label>
+            <div class="col-sm-10">
+              <div class="checkbox">
+                <label>
+                  <input type="checkbox" name="module_cults3d_import_overwrite_existing" value="1" {% if module_cults3d_import_overwrite_existing %}checked{% endif %}>
+                  Felülírhatja a meglévő terméket (azonos <em>modell</em> esetén)
+                </label>
+              </div>
+
+              
+            </div>
+          </div>
+
+          <hr>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">OpenAI mód</label>
+            <div class="col-sm-10">
+              <label class="checkbox-inline">
+                <input type="checkbox" name="module_cults3d_import_enable_translation" value="1" {% if module_cults3d_import_enable_translation %}checked{% endif %}> Bekapcsolva
+              </label>
+              <p class="help-block">Minden admin nyelvre ugyanazzal a prompttal a cél nyelven generálunk (név, leírás, meta).</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">OpenAI prompt</label>
+            <div class="col-sm-10">
+              <textarea name="module_cults3d_import_openai_prompt" class="form-control" rows="3" placeholder="Írj részletes, jól tagolt leírást a cél nyelven; egyszerű HTML (&lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt;) megengedett.">{{ module_cults3d_import_openai_prompt }}</textarea>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">OpenAI API kulcs</label>
+            <div class="col-sm-10">
+              <input type="text" name="module_cults3d_import_openai_api_key" value="{{ module_cults3d_import_openai_api_key }}" class="form-control" placeholder="sk-..." />
+            </div>
+          </div>
+
+          <hr>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">Cron titkos kulcs</label>
+            <div class="col-sm-10">
+              <input type="text" name="module_cults3d_import_cron_key" value="{{ module_cults3d_import_cron_key }}" class="form-control" />
+              <p class="help-block">Mentés után ezzel a kulccsal hívható a cron végpont.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">Cron minta hívás</label>
+            <div class="col-sm-10">
+              <div class="input-group">
+                <input type="text" value="{{ cron_url }}" class="form-control" readonly />
+                <span class="input-group-btn">
+                  <button type="button" class="btn btn-default" onclick="navigator.clipboard.writeText('{{ cron_url }}')"><i class="fa fa-clipboard"></i></button>
+                </span>
+              </div>
+              <p class="help-block">Crontab példa: <code>*/5 * * * * curl -s '{{ cron_url }}' &gt; /dev/null</code> — használhatsz <code>&batch=NEV</code> paramétert is.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">Várólista feltöltése</label>
+            <div class="col-sm-10">
+              <button type="button" id="btn-queue-add" class="btn btn-warning">
+                <i class="fa fa-plus"></i> URL-ek felvétele a várólistára
+              </button>
+              <p class="help-block">
+                Sor szintű címkézés: pl. <code>[cat:5]</code> <code>https://cults3d.com/...</code>.
+                A batch-et nem szükséges megadni: ha van kategória, a batch automatikusan a kategória <em>neve</em>.
+                Több kategória esetén soronként add meg a <code>[cat:ID]</code>-t (pl. 4 kategória × 10 URL → 40 sor a megfelelő batch-ekkel).
+              </p>
+              <div id="queue-msg" style="margin-top:8px;"></div>
+            </div>
+          </div>
+
+        </form>
+      </div>
+    </div>
+
+    <div class="panel panel-default">
+      <div class="panel-heading"><i class="fa fa-download"></i> Kézi import (soros, 1 URL / kérés)</div>
+      <div class="panel-body">
+        <div id="progress" style="margin-bottom:8px;"></div>
+        <div id="import-results" style="white-space: pre-line; background:#f9f9f9; border:1px solid #ddd; padding:10px; height:320px; overflow-y:auto;"></div>
+
+        <div style="margin-top:10px;">
+          <div class="input-group" style="max-width:460px;">
+            <input type="text" id="manual-batch" class="form-control" placeholder="batch szűrő (opcionális)">
+            <span class="input-group-btn">
+              <button type="button" id="btn-queue-run" class="btn btn-info">
+                <i class="fa fa-play"></i> Várólista futtatása (kézzel)
+              </button>
+            </span>
+          </div>
+          <p class="help-block">1 tétel / hívás, ismételve. Batch üresen: minden pending.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="text/javascript">
+(function(){
+  function appendLine(html) {
+    var box = $('#import-results');
+    box.append(html + "\n");
+    box.scrollTop(box.prop('scrollHeight'));
+  }
+
+  $('#btn-queue-add').on('click', function(){
+    var urls = ($('textarea[name="module_cults3d_import_urls"]').val() || '').trim();
+    var cat  = $('select[name="module_cults3d_import_category_id"]').val();
+
+    if (!urls.length) {
+      $('#queue-msg').html('<span class="text-danger">Nincs feldolgozható URL.</span>');
+      return;
+    }
+
+    $.ajax({
+      url: '{{ queue_add_action_js }}',
+      type: 'post',
+      dataType: 'text',
+      data: { urls: urls, category_id: cat, user_token: '{{ user_token }}' },
+      success: function(txt) {
+        if (/<title>.*(Login|Adminisztráció).*<\/title>|route=common\/login/i.test(txt)) {
+          $('#queue-msg').html('<span class="text-danger">Úgy tűnik, lejárt a munkamenet. Frissíts és jelentkezz be újra.</span>');
+          return;
+        }
+        var res;
+        try { res = JSON.parse(txt); } catch(e) {
+          $('#queue-msg').html('<span class="text-danger">Váratlan válasz (nem JSON). Első 200 karakter:<br><code>' + $('<div>').text((txt||'').slice(0,200)).html() + '</code></span>');
+          return;
+        }
+        if (res && res.ok) {
+          $('#queue-msg').html('<span class="text-success">'+ res.message +'</span>');
+        } else {
+          $('#queue-msg').html('<span class="text-danger">'+ (res && res.message ? res.message : 'Ismeretlen hiba') +'</span>');
+        }
+      },
+      error: function(xhr, textStatus) {
+        $('#queue-msg').html('<span class="text-danger">Hiba: ' + xhr.status + ' ' + xhr.statusText + ' ('+ textStatus +')</span>');
+      }
+    });
+  });
+
+  $('#btn-import').on('click', function() {
+    var urls = ($('textarea[name="module_cults3d_import_urls"]').val() || '')
+      .split(/\r?\n/)
+      .map(function(s){ return s.trim(); })
+      .filter(function(s){ return s.length > 0; });
+
+    if (!urls.length) {
+      appendLine('Nincs feldolgozható URL.');
+      return;
+    }
+
+    var cat    = $('select[name="module_cults3d_import_category_id"]').val();
+    var delay  = parseInt($('input[name="module_cults3d_import_delay"]').val() || '0', 10);
+    var enable = $('input[name="module_cults3d_import_enable_translation"]').is(':checked') ? 1 : 0;
+    var prompt = $('textarea[name="module_cults3d_import_openai_prompt"]').val();
+    var key    = $('input[name="module_cults3d_import_openai_api_key"]').val();
+
+    var total = urls.length, idx = 0;
+    $('#import-results').html('');
+    $('#progress').text('0 / ' + total + ' kész');
+    $('#btn-import').prop('disabled', true);
+
+    function next() {
+      if (idx >= total) {
+        $('#progress').text(total + ' / ' + total + ' kész');
+        $('#btn-import').prop('disabled', false);
+        return;
+      }
+
+      var payload = {
+        url: urls[idx],
+        category_id: cat,
+        enable_translation: enable,
+        openai_prompt: prompt,
+        openai_api_key: key,
+        user_token: '{{ user_token }}'
+      };
+
+      $.ajax({
+        url: '{{ import_single_action_js }}',
+        type: 'post',
+        dataType: 'json',
+        data: payload,
+        success: function(res) {
+          if (res && res.ok) {
+            appendLine(res.line);
+          } else {
+            appendLine(res && res.line ? res.line : ('❌ ' + urls[idx] + ' – ismeretlen hiba'));
+          }
+        },
+        error: function(xhr) {
+          appendLine('❌ ' + urls[idx] + ' – AJAX hiba: ' + xhr.status + ' ' + xhr.statusText);
+        },
+        complete: function() {
+          idx++;
+          $('#progress').text(idx + ' / ' + total + ' kész');
+          setTimeout(next, Math.max(0, delay * 1000));
+        }
+      });
+    }
+
+    next();
+  });
+
+  $('#btn-queue-run').on('click', function() {
+    var base = '{{ cron_url }}';
+    var batch = ($('#manual-batch').val() || '').trim();
+    var total = 0;
+
+    function makeUrl() {
+      var u = base.replace(/&limit=\d+/, '&limit=1').replace(/&sleep=\d+/, '&sleep=0');
+      if (batch.length) u += '&batch=' + encodeURIComponent(batch);
+      return u;
+    }
+
+    function tick() {
+      $.ajax({
+        url: makeUrl(),
+        type: 'get',
+        dataType: 'text',
+        success: function(txt) {
+          var res;
+          try { res = JSON.parse(txt); } catch(e) {
+            appendLine('❌ Cron válasz nem JSON. Első 200 karakter: ' + (txt||'').slice(0,200));
+            return;
+          }
+          if (res && res.ok && res.processed > 0) {
+            total += res.processed;
+            appendLine('⚙️ Feldolgozva: ' + res.processed + ' (siker: ' + res.done + ', hiba: ' + res.errors + ')');
+            setTimeout(tick, 500);
+          } else {
+            appendLine('✅ Kész. Összesen: ' + total + ' tétel.');
+          }
+        },
+        error: function(xhr){ appendLine('❌ Cron hívás hiba: ' + xhr.status + ' ' + xhr.statusText); }
+      });
+    }
+
+    appendLine('▶️ Kézi várólista feldolgozás indítva' + (batch ? (' (batch: ' + batch + ')') : '') + ' …');
+    tick();
+  });
+
+})();
+</script>
+
+{{ footer }}
